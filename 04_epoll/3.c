@@ -1,8 +1,6 @@
-
-
-
 #include <stdio.h>
 #include <fcntl.h>
+#include "wrap.c"
 #include "wrap.h"
 #include <sys/epoll.h>
 int main(int argc, char *argv[])
@@ -43,34 +41,52 @@ int main(int argc, char *argv[])
                     char ip[16] = "";
                     socklen_t len = sizeof(cliaddr);
                     int cfd =   Accept(lfd,(struct sockaddr *)&cliaddr,&len);
-                    printf("new client ip=%s port =%d\n",inet_ntop(AF_INET,&cliaddr.sin_addr.s_addr,ip,16)
+                    printf("new client ip=%sport =%d\n",inet_ntop(AF_INET,&cliaddr.sin_addr.s_addr,ip,16)
 							,ntohs(cliaddr.sin_port));
+                    int flags = fcntl(cfd,F_GETFL);//获取的cfd的标志位
+					flags |= O_NONBLOCK;
+					fcntl(cfd,F_SETFL,flags);
                     //将cfd上树
                     ev.data.fd = cfd;
                     ev.events = EPOLLIN | EPOLLET;
-                    epoll_ctl(epfd,EPOLL_CTL_ADD,cdf,&ev);
+                    epoll_ctl(epfd,EPOLL_CTL_ADD,cfd,&ev);
 
 
 				
 				}
 				else if( evs[i].events & EPOLLIN)//cfd变化 ,而且是读事件变化
 				{
-					char buf[1024] = "";
-                    int n = read(evs[i].data.fd,buf,sizeof(buf));
-                    if (n<0){
-                        perror("");
-                        epoll_ctl(epfd,EPOLL_CTL_DEL,evs[i].data.fd,&evs[i]);
-                    }
-                    if (n==0){
-                        printf("client close");
-                        Close(evs[i].data.fd);
-                        epoll_ctl(epfd,EPOLL_CTL_DEL,evs[i].data.fd,&evs[i]);
-                    }
-                    else{
-                        printf("%s\n",buf);
-                        Write(evs[i].data.fd,buf,sizeof(buf));
-                    }
+					while (1)
+                    {
+                        /* code */
+                    
+                    
+                        char buf1[4] ="";
+                        int n = read(evs[i].data.fd,buf1,sizeof(buf1));
+                        //如果读一个缓冲区,缓冲区没有数据,如果是带阻塞,就阻塞等待,如果
+						//是非阻塞,返回值等于-1,并且会将errno 值设置为EAGAIN
+                        //printf("%s\n",buf1);
+                        write(STDOUT_FILENO,buf1,4);
+                        
+                        if (n<0){
 
+                            if(errno = EAGAIN){
+                                break;
+                            }
+                            perror("");
+                            epoll_ctl(epfd,EPOLL_CTL_DEL,evs[i].data.fd,&evs[i]);
+                        }
+                        if (n==0){
+                            printf("client close");
+                            Close(evs[i].data.fd);
+                            epoll_ctl(epfd,EPOLL_CTL_DEL,evs[i].data.fd,&evs[i]);
+                            break;
+                        }
+                        else{
+                            
+                            write(evs[i].data.fd,buf1,sizeof(buf1));
+                        }
+                    }
 
 				}
 			
@@ -84,5 +100,3 @@ int main(int argc, char *argv[])
 	
 	return 0;
 }
-
-
